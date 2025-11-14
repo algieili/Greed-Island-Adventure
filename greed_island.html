@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Island Adventure</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: url('https://via.placeholder.com/1920x1080/4CAF50/FFFFFF?text=Greed+Island+Forest') no-repeat center center fixed; /* Placeholder image; replace with local file */
+            background-size: cover;
+            color: #060303;
+            margin: 0;
+            padding: 20px;
+            transition: background-color 1s;
+        }
+        #startMenu, #pauseMenu { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; color: white; }
+        #startMenu { display: block; }
+        #story { margin: 20px auto; max-width: 600px; font-size: 18px; line-height: 1.6; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; }
+        #image { width: 400px; height: 300px; margin: 20px auto; border: 2px solid #333; background-color: #f0f0f0; transition: opacity 1s; }
+        button { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; }
+        .choiceBtn { background: #4CAF50; color: white; }
+        .choiceBtn:hover { background: #45a049; box-shadow: 0 0 10px #4CAF50; } /* Visual cue */
+        #deck { margin: 20px auto; max-width: 600px; display: flex; flex-wrap: wrap; justify-content: center; }
+        .card { margin: 5px; padding: 10px; border: 1px solid #333; cursor: pointer; background-color: #fff; border-radius: 5px; }
+        .card:hover { background-color: #ddd; box-shadow: 0 0 5px #333; }
+        #feedback { font-style: italic; color: #666; margin-top: 10px; background: rgba(255,255,255,0.8); padding: 5px; }
+        #progress { width: 100%; height: 10px; background: #ddd; margin: 10px 0; }
+        #progressBar { height: 100%; background: #4CAF50; width: 0%; transition: width 0.5s; }
+        .hidden { display: none; }
+        #dialogueBox { background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; position: fixed; top: 20%; left: 20%; width: 60%; display: none; }
+    </style>
+</head>
+<body>
+    <div id="startMenu">
+        <h1>Greed Island Adventure</h1>
+        <p>Enter the virtual world to collect cards and face moral dilemmas. Your choices shape the story.</p>
+        <button onclick="startGame()">Start Game</button>
+        <button onclick="showSettings()">Settings</button>
+    </div>
+    <div id="pauseMenu" class="hidden">
+        <h2>Paused</h2>
+        <button onclick="resumeGame()">Resume</button>
+        <button onclick="showSettings()">Settings</button>
+        <button onclick="restart()">Restart</button>
+    </div>
+    <div id="game" class="hidden">
+        <button onclick="pauseGame()" style="position: absolute; top: 10px; right: 10px;">Pause</button>
+        <div id="progress"><div id="progressBar"></div></div>
+        <div id="story">You are Gon, a young Hunter entering Greed Island to find rare cards and test your limits. The island is full of challenges and moral choices. Head north to the forest or east to the ruins?</div>
+        <img id="image" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5HcmVlZCBJc2xhbmQgRW50cmFuY2U8L3RleHQ+PC9zdmc+" alt="Greed Island Entrance">
+        <div id="choices">
+            <button class="choiceBtn" onclick="choose('north')">Go North (Forest Path)</button>
+            <button class="choiceBtn" onclick="choose('east')">Go East (Ruins Path)</button>
+        </div>
+        <div id="deck" class="hidden">
+            <div class="card" onclick="selectCard('Basic Attack')">Basic Attack</div>
+            <div class="card" onclick="selectCard('Heal')">Heal</div>
+            <div class="card" onclick="selectCard('Fireball')">Fireball</div>
+        </div>
+        <div id="feedback" class="hidden"></div>
+        <div id="dialogueBox">
+            <p id="dialogueText"></p>
+            <button onclick="closeDialogue()">Continue</button>
+        </div>
+        <audio id="sound" preload="auto"></audio>
+    </div>
+
+    <script>
+        let state = 'start';
+        let deck = ['Basic Attack', 'Heal', 'Fireball'];
+        let collectedCards = [];
+        let health = 100;
+        let progress = 0;
+        let paused = false;
+        const story = document.getElementById('story');
+        const image = document.getElementById('image');
+        const choices = document.getElementById('choices');
+        const deckDiv = document.getElementById('deck');
+        const feedback = document.getElementById('feedback');
+        const progressBar = document.getElementById('progressBar');
+        const dialogueBox = document.getElementById('dialogueBox');
+        const dialogueText = document.getElementById('dialogueText');
+        const sound = document.getElementById('sound');
+
+        function playSound(freq, duration) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = freq;
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function startGame() {
+            document.getElementById('startMenu').style.display = 'none';
+            document.getElementById('game').classList.remove('hidden');
+            progress = 10;
+            updateProgress();
+        }
+
+        function pauseGame() {
+            paused = true;
+            document.getElementById('pauseMenu').classList.remove('hidden');
+        }
+
+        function resumeGame() {
+            paused = false;
+            document.getElementById('pauseMenu').classList.add('hidden');
+        }
+
+        function showSettings() {
+            alert('Settings: Adjust volume or difficulty here (placeholder).');
+        }
+
+        function choose(option) {
+            if (paused) return;
+            if (state === 'start') {
+                progress += 20;
+                updateProgress();
+                if (option === 'north') {
+                    story.textContent = 'In the forest, you meet Killua, a fellow Hunter in trouble. A monster approaches. Do you ally with Killua (share cards) or betray him (take his cards for yourself)? This moral choice will define your bond.';
+                    image.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjNGNhZjUwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5Gb3Jlc3QgQWxpYW5jZTwvdGV4dD48L3N2Zz4=';
+                    document.body.style.backgroundColor = 'rgba(76, 175, 80, 0.7)';
+                    feedback.textContent = 'Trust or treachery? Your choice shapes alliances.';
+                    feedback.classList.remove('hidden');
+                    playSound(200, 0.5);
+                    state = 'decision1';
+                    choices.innerHTML = '<button class="choiceBtn" onclick="decide1(\'ally\')">Ally with Killua (Moral Path)</button><button class="choiceBtn" onclick="decide1(\'betray\')">Betray Killua (Selfish Path)</button>';
+                } else {
+                    story.textContent = 'In the ruins, you find a chest with a rare card, but opening it risks a trap. Do you open it or leave? This strategic choice tests your greed vs. caution.';
+                    image.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjNzk1NTQ4Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5SdWlucyBEaWxlbW1hPC90ZXh0Pjwvc3ZnPg==';
+                    document.body.style.backgroundColor = 'rgba(121, 85, 72, 0.7)';
+                    feedback.textContent = 'Greed calls— but at what cost?';
+                    feedback.classList.remove('hidden');
+                    playSound(400, 0.5);
+                    state = 'decision1_alt';
+                    choices.innerHTML = '<button class="choiceBtn" onclick="decide1Alt(\'open\')">Open Chest (Risky)</button><button class="choiceBtn" onclick="decide1Alt(\'leave\')">Leave (Safe)</button>';
+                }
+            }
+        }
+
+        function decide1(option) {
+            progress += 30;
+            updateProgress();
+            if (option === 'ally') {
+                story.textContent = 'You ally with Killua, sharing cards. Now, a boss monster appears. Do you sacrifice your rare card to save Killua or use it for victory alone?';
+                state = 'decision2';
+                choices.innerHTML = '<button class="choiceBtn" onclick="decide2(\'sacrifice\')">Sacrifice for Killua (Heroic)</button><button class="choiceBtn" onclick="decide2(\'selfish\')">Use for Yourself (Strategic)</button>';
+            } else {
+                story.textContent = 'You betray Killua, taking his cards. He feels betrayed, weakening your alliance. A monster attacks—fight alone or flee?';
+                state = 'decision2_betray';
+                choices.innerHTML = '<button class="choiceBtn" onclick="decide2Betray(\'fight\')">Fight Alone</button><button class="choiceBtn" onclick="decide2Betray(\'flee\')">Flee</button>';
+            }
+        }
+
+        function decide1Alt(option) {
+            progress += 30;
+            updateProgress();
+            if (option === 'open') {
+                story.textContent = 'You open the chest, gaining a powerful card but triggering a trap that injures you. Now, use the card to heal or fight?';
+                health -= 20;
+                state = 'decision2_alt';
+                choices.innerHTML = '<button class="choiceBtn" onclick="decide2Alt(\'heal\')">Heal</button><button class="choiceBtn" onclick="decide2Alt(\'fight\')">Fight</button>';
+            } else {
+                story.textContent = 'You leave safely. Ending: Cautious Exit. You avoided risk but gained nothing.';
+                choices.innerHTML = '<button onclick="restart()">Play Again</button>';
+            }
+        }
+
+        function decide2(option) {
+            if (option === 'sacrifice') {
+                story.textContent = 'You sacrifice for Killua. Together, you win! Ending: Heroic Alliance. Killua trusts you forever.';
+                collectedCards.push('Alliance Card');
+                progress = 100;
+                updateProgress();
+                choices.innerHTML = '<button onclick="restart()">Play Again</button>';
+            } else {
+                story.textContent = 'You use it for yourself, defeating the monster but leaving Killua hurt. Ending: Selfish Victory. Your greed isolates you.';
+                collectedCards.push('Victory Card');
+                progress = 100;
+                updateProgress();
+                choices.innerHTML = '<button onclick="restart()">Play Again</button>';
+            }
+        }
+
+        function decide2Betray(option) {
+            if (option === 'fight') {
+                story.textContent = 'You fight alone and win, but barely. Ending: Lonely Triumph. Betrayal haunts you.';
+                collectedCards.push('Triumph Card');
+            } else {
+                story.textContent = 'You flee, losing cards. Ending: Tragic Betrayal. Regret fills your heart.';
+            }
+            progress = 100;
+            updateProgress();
+            choices.innerHTML = '<button onclick="restart()">Play Again</button>';
+        }
+
+        function decide2Alt(option) {
+            if (option === 'heal') {
+                health += 20;
+                story.textContent = 'You heal and escape. Ending: Wise Recovery. Caution paid off.';
+            } else {
+                story.textContent = 'You fight injured and lose. Ending: Foolish Risk. Greed led to defeat.';
+            }
+            progress = 100;
+            updateProgress();
+            choices.innerHTML = '<button onclick="restart()">Play Again</button>';
+        }
+
+        function selectCard(card) {
+            // Simplified for brevity; integrates with decisions
+            story.textContent = 'Card used! Outcome depends on prior choices.';
+            deckDiv.classList.add('hidden');
+        }
+
+        function closeDialogue() {
+            dialogueBox.style.display = 'none';
+        }
+
+        function updateProgress() {
+            progressBar.style.width = progress + '%';
+        }
+
+        function restart() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>
